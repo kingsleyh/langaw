@@ -1,61 +1,50 @@
 import 'dart:math';
-
+import 'dart:ui';
 import 'package:flame/flame.dart';
 import 'package:flame/game.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:langaw/components/agile-fly.dart';
 import 'package:langaw/components/backyard.dart';
-import 'dart:ui';
-
+import 'package:langaw/components/drooler-fly.dart';
 import 'package:langaw/components/fly.dart';
 import 'package:langaw/components/house-fly.dart';
-import 'package:langaw/components/agile-fly.dart';
-import 'package:langaw/components/drooler-fly.dart';
 import 'package:langaw/components/hungry-fly.dart';
 import 'package:langaw/components/macho-fly.dart';
 import 'package:langaw/components/start-button.dart';
+import 'package:langaw/controllers/spawner.dart';
 import 'package:langaw/view.dart';
 import 'package:langaw/views/home-view.dart';
+import 'package:langaw/views/lost-view.dart';
 
 class LangawGame extends Game {
   Size screenSize;
   double tileSize;
+  Random rnd;
+
   Backyard background;
   List<Fly> flies;
-  Random rnd;
+  StartButton startButton;
+
+  FlySpawner spawner;
+
   View activeView = View.home;
   HomeView homeView;
-  StartButton startButton;
+  LostView lostView;
 
   LangawGame() {
     initialize();
   }
 
   void initialize() async {
-    flies = List<Fly>();
     rnd = Random();
+    flies = List<Fly>();
     resize(await Flame.util.initialDimensions());
 
     background = Backyard(this);
-    homeView = HomeView(this);
     startButton = StartButton(this);
-    spawnFly();
-  }
-
-  void render(Canvas canvas) {
-    background.render(canvas);
-
-    flies.forEach((Fly fly) => fly.render(canvas));
-    if (activeView == View.home) homeView.render(canvas);
-  }
-
-  void update(double t) {
-    flies.forEach((Fly fly) => fly.update(t));
-    flies.removeWhere((Fly fly) => fly.isOffScreen);
-  }
-
-  void resize(Size size) {
-    screenSize = size;
-    tileSize = screenSize.width / 9;
+    spawner = FlySpawner(this);
+    homeView = HomeView(this);
+    lostView = LostView(this);
   }
 
   void spawnFly() {
@@ -81,11 +70,53 @@ class LangawGame extends Game {
     }
   }
 
+  void render(Canvas canvas) {
+    background.render(canvas);
+
+    flies.forEach((Fly fly) => fly.render(canvas));
+
+    if (activeView == View.home) homeView.render(canvas);
+    if (activeView == View.lost) lostView.render(canvas);
+    if (activeView == View.home || activeView == View.lost) {
+      startButton.render(canvas);
+    }
+  }
+
+  void update(double t) {
+    spawner.update(t);
+    flies.forEach((Fly fly) => fly.update(t));
+    flies.removeWhere((Fly fly) => fly.isOffScreen);
+  }
+
+  void resize(Size size) {
+    screenSize = size;
+    tileSize = screenSize.width / 9;
+  }
+
   void onTapDown(TapDownDetails d) {
-    flies.forEach((Fly fly) {
-      if (fly.flyRect.contains(d.globalPosition)) {
-        fly.onTapDown();
+    bool isHandled = false;
+
+    // start button
+    if (!isHandled && startButton.rect.contains(d.globalPosition)) {
+      if (activeView == View.home || activeView == View.lost) {
+        startButton.onTapDown();
+        isHandled = true;
       }
-    });
+    }
+
+    // flies
+    if (!isHandled) {
+      bool didHitAFly = false;
+      flies.forEach((Fly fly) {
+        if (fly.flyRect.contains(d.globalPosition)) {
+          fly.onTapDown();
+          isHandled = true;
+          didHitAFly = true;
+        }
+      });
+      if (activeView == View.playing && !didHitAFly) {
+        activeView = View.lost;
+      }
+    }
   }
 }
